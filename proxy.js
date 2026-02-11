@@ -3,16 +3,32 @@ import fetch from 'node-fetch';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const BRIGHTDATA_URL = `https://mcp.brightdata.com/mcp?token=${process.env.API_TOKEN}`;
+const API_TOKEN = process.env.API_TOKEN;
+
+console.log('Starting proxy server...');
+console.log('API_TOKEN exists:', !!API_TOKEN);
+
+if (!API_TOKEN) {
+  console.error('ERROR: API_TOKEN environment variable not set!');
+}
+
+const BRIGHTDATA_URL = `https://mcp.brightdata.com/mcp?token=${API_TOKEN}`;
 
 app.use(express.json());
 
 app.get('/health', (req, res) => {
-  res.json({ status: 'ok' });
+  res.json({ 
+    status: 'ok',
+    hasToken: !!API_TOKEN
+  });
 });
 
 app.all('/mcp', async (req, res) => {
+  console.log(`Received ${req.method} request to /mcp`);
+  
   try {
+    console.log('Forwarding to BrightData...');
+    
     const response = await fetch(BRIGHTDATA_URL, {
       method: req.method,
       headers: {
@@ -21,6 +37,8 @@ app.all('/mcp', async (req, res) => {
       },
       body: req.method !== 'GET' ? JSON.stringify(req.body) : undefined
     });
+
+    console.log('BrightData responded with status:', response.status);
 
     const contentType = response.headers.get('content-type');
     
@@ -34,6 +52,8 @@ app.all('/mcp', async (req, res) => {
       res.status(response.status).send(data);
     }
   } catch (error) {
+    console.error('Proxy error:', error.message);
+    console.error('Stack:', error.stack);
     res.status(500).json({ error: error.message });
   }
 });
