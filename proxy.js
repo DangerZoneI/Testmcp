@@ -7,11 +7,9 @@ const PORT = process.env.PORT || 3000;
 const API_TOKEN = process.env.API_TOKEN;
 
 console.log('Starting proxy server...');
-console.log('API_TOKEN exists:', !!API_TOKEN);
 
 const BRIGHTDATA_URL = `https://mcp.brightdata.com/mcp?token=${API_TOKEN}`;
 
-// Create HTTPS agent that ignores SSL certificate errors
 const httpsAgent = new https.Agent({
   rejectUnauthorized: false
 });
@@ -19,47 +17,54 @@ const httpsAgent = new https.Agent({
 app.use(express.json());
 
 app.get('/health', (req, res) => {
-  res.json({ 
-    status: 'ok',
-    hasToken: !!API_TOKEN
-  });
+  res.json({ status: 'ok' });
 });
 
+// Forward all requests to BrightData
 app.all('/mcp', async (req, res) => {
-  console.log(`Received ${req.method} request to /mcp`);
+  console.log(`${req.method} /mcp`);
   
   try {
-    console.log('Forwarding to BrightData...');
-    
+    // Build headers - forward important ones from client
+    const headers = {
+      'Accept': req.headers['accept'] || 'application/json, text/event-stream',
+      'Content-Type': 'application/json',
+      'User-Agent': req.headers['user-agent'] || 'railway-proxy'
+    };
+
+    console.log('Headers:', headers);
+    console.log('Query params:', req.query);
+
     const response = await fetch(BRIGHTDATA_URL, {
       method: req.method,
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: req.method !== 'GET' ? JSON.stringify(req.body) : undefined,
+      headers: headers,
+      body: req.method !== 'GET' && req.body ? JSON.stringify(req.body) : undefined,
       agent: httpsAgent
     });
 
-    console.log('BrightData responded with status:', response.status);
+    console.log('Status:', response.status);
 
+    // Copy response headers
+    response.headers.forEach((value, name) => {
+      res.setHeader(name, value);
+    });
+
+    // Handle SSE or regular response
     const contentType = response.headers.get('content-type');
-    
     if (contentType && contentType.includes('text/event-stream')) {
-      res.setHeader('Content-Type', 'text/event-stream');
-      res.setHeader('Cache-Control', 'no-cache');
-      res.setHeader('Connection', 'keep-alive');
+      console.log('Streaming SSE response');
       response.body.pipe(res);
     } else {
       const data = await response.text();
-      console.log('Response data:', data.substring(0, 200));
+      console.log('Response:', data.substring(0, 200));
       res.status(response.status).send(data);
     }
   } catch (error) {
-    console.error('Proxy error:', error.message);
+    console.error('Error:', error.message);
     res.status(500).json({ error: error.message });
   }
 });
 
 app.listen(PORT, '0.0.0.0', () => {
-  console.log(`Proxy running on port ${PORT}`);
+  console.log(`Proxy on port ${PORT}`);
 });
