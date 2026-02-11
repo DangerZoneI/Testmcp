@@ -1,18 +1,13 @@
 {
   "name": "brightdata-mcp-railway",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "type": "module",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "node server.js"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "type": "commonjs",
   "dependencies": {
-    "@brightdata/mcp": "^2.8.4",
-    "@modelcontextprotocol/sdk": "^1.26.0",
-    "express": "^5.2.1"
+    "@brightdata/mcp": "latest",
+    "@modelcontextprotocol/sdk": "latest",
+    "express": "^4.18.2"
   }
 }
