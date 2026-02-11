@@ -1,59 +1,51 @@
-import { spawn } from 'child_process';
 import express from 'express';
-import { Server } from '@modelcontextprotocol/sdk/server/index.js';
-import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js';
-import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
-import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import httpProxy from 'http-proxy';
+import https from 'https';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+const API_TOKEN = process.env.API_TOKEN;
 
-// Create client that connects to BrightData via stdio
-const client = new Client({
-  name: 'brightdata-client',
-  version: '1.0.0'
-}, {
-  capabilities: {}
+// Create proxy
+const proxy = httpProxy.createProxyServer({
+  target: `https://mcp.brightdata.com`,
+  changeOrigin: true,
+  ws: true,
+  secure: false,
+  followRedirects: true
 });
 
-const transport = new StdioClientTransport({
-  command: 'npx',
-  args: ['-y', '@brightdata/mcp'],
-  env: {
-    API_TOKEN: process.env.API_TOKEN,
-    PRO_MODE: process.env.PRO_MODE || 'false'
+// Handle proxy errors
+proxy.on('error', (err, req, res) => {
+  console.error('Proxy error:', err.message);
+  if (!res.headersSent) {
+    res.writeHead(500, { 'Content-Type': 'text/plain' });
   }
+  res.end('Proxy error');
 });
 
-// Connect client
-await client.connect(transport);
-console.log('Connected to BrightData MCP');
-
-// Create HTTP/SSE server that exposes the client
-const server = new Server({
-  name: 'brightdata-http-server',
-  version: '1.0.0'
-}, {
-  capabilities: client.getServerCapabilities()
+// Proxy /mcp to BrightData
+app.all('/mcp', (req, res) => {
+  console.log(`${req.method} /mcp`);
+  
+  // Add token to query
+  req.url = `/mcp?token=${API_TOKEN}`;
+  
+  proxy.web(req, res);
 });
-
-// Forward all tool calls to BrightData client
-server.setRequestHandler({ method: 'tools/list' }, async () => {
-  return await client.listTools();
-});
-
-server.setRequestHandler({ method: 'tools/call' }, async (request) => {
-  return await client.callTool(request.params.name, request.params.arguments);
-});
-
-// Setup SSE transport
-const sseTransport = new SSEServerTransport('/mcp', server);
-app.use(sseTransport.requestHandler());
 
 app.get('/health', (req, res) => {
   res.json({ status: 'ok' });
 });
 
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`MCP server running on port ${PORT}`);
+const server = app.listen(PORT, '0.0.0.0', () => {
+  console.log(`Proxy on ${PORT}`);
+});
+
+// Handle WebSocket upgrades
+server.on('upgrade', (req, socket, head) => {
+  if (req.url.startsWith('/mcp')) {
+    req.url = `/mcp?token=${API_TOKEN}`;
+    proxy.ws(req, socket, head);
+  }
 });
