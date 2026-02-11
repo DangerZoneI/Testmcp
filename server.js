@@ -1,35 +1,29 @@
-import { spawn } from 'child_process';
 import express from 'express';
+import { Server } from '@modelcontextprotocol/sdk/server/index.js';
+import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Health check
 app.get('/health', (req, res) => {
   res.json({ status: 'ok' });
 });
 
-app.post('/mcp', express.json(), async (req, res) => {
-  const mcpProcess = spawn('npx', ['@brightdata/mcp'], {
-    env: {
-      ...process.env,
-      API_TOKEN: process.env.API_TOKEN,
-      PRO_MODE: process.env.PRO_MODE || 'false'
-    },
-    stdio: ['pipe', 'pipe', 'pipe']
-  });
-
-  mcpProcess.stdin.write(JSON.stringify(req.body) + '\n');
-  
-  let response = '';
-  mcpProcess.stdout.on('data', (data) => {
-    response += data.toString();
-  });
-
-  mcpProcess.on('close', () => {
-    res.json(JSON.parse(response));
-  });
+// Create MCP server that proxies to BrightData
+const mcpServer = new Server({
+  name: 'brightdata-proxy',
+  version: '1.0.0'
+}, {
+  capabilities: {
+    tools: {}
+  }
 });
 
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+// SSE endpoint for MCP
+const transport = new SSEServerTransport('/mcp', mcpServer);
+app.use(transport.requestHandler());
+
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`MCP server running on port ${PORT}`);
 });
