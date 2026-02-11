@@ -1,5 +1,6 @@
 import express from 'express';
 import fetch from 'node-fetch';
+import https from 'https';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -8,11 +9,12 @@ const API_TOKEN = process.env.API_TOKEN;
 console.log('Starting proxy server...');
 console.log('API_TOKEN exists:', !!API_TOKEN);
 
-if (!API_TOKEN) {
-  console.error('ERROR: API_TOKEN environment variable not set!');
-}
-
 const BRIGHTDATA_URL = `https://mcp.brightdata.com/mcp?token=${API_TOKEN}`;
+
+// Create HTTPS agent that ignores SSL certificate errors
+const httpsAgent = new https.Agent({
+  rejectUnauthorized: false
+});
 
 app.use(express.json());
 
@@ -32,10 +34,10 @@ app.all('/mcp', async (req, res) => {
     const response = await fetch(BRIGHTDATA_URL, {
       method: req.method,
       headers: {
-        'Content-Type': 'application/json',
-        ...req.headers
+        'Content-Type': 'application/json'
       },
-      body: req.method !== 'GET' ? JSON.stringify(req.body) : undefined
+      body: req.method !== 'GET' ? JSON.stringify(req.body) : undefined,
+      agent: httpsAgent
     });
 
     console.log('BrightData responded with status:', response.status);
@@ -49,11 +51,11 @@ app.all('/mcp', async (req, res) => {
       response.body.pipe(res);
     } else {
       const data = await response.text();
+      console.log('Response data:', data.substring(0, 200));
       res.status(response.status).send(data);
     }
   } catch (error) {
     console.error('Proxy error:', error.message);
-    console.error('Stack:', error.stack);
     res.status(500).json({ error: error.message });
   }
 });
