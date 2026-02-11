@@ -8,7 +8,6 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-// Simple proxy endpoint
 app.all('/mcp', express.json(), async (req, res) => {
   try {
     const brightdata = spawn('npx', ['-y', '@brightdata/mcp'], {
@@ -50,11 +49,3 @@ app.all('/mcp', express.json(), async (req, res) => {
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`Server running on port ${PORT}`);
 });
-```
-
-## File 3: `.gitignore`
-```
-node_modules/
-.env
-.DS_Store
-*.log
