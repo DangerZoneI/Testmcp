@@ -1,7 +1,0 @@
-{
-  "name": "brightdata-mcp",
-  "private": true,
-  "scripts": {
-    "start": "npx @brightdata/mcp"
-  }
-}
